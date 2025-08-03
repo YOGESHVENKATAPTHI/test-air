@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinity Share</title>
+    <!-- Streamsaver for fallback streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.5/stream-saver.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@^2.0/dist/tailwind.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+
+  <style>
+    /* Chat message styling */
+    .chat-message {
+      border-radius: 10px;
+      padding: 10px;
+      max-width: 70%;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      position: relative;
+      margin-bottom: 20px;
+      transition: background-color 0.3s ease;
+    }
+    .sent,
+    .received {
+      background-color: #2d3748;
+      align-self: flex-start;
+    }
+    .highlighted {
+      background-color: #3b82f6;
+    }
+    .message-date {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      position: absolute;
+      bottom: -16px;
+      right: 0;
+      white-space: nowrap;
+    }
+    .header-icon {
+      transition: color 0.3s ease;
+    }
+    .header-icon:hover {
+      color: #3b82f6;
+    }
+    body {
+      background-color: #1a202c;
+      color: white;
+      overflow: hidden;
+    }
+    .file-preview {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .sending-indicator {
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 32, 44, 0.85);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      display: none;
+    }
+    .sending-indicator.active {
+      display: flex;
+    }
+    .sending-spinner {
+      animation: spin 1s linear infinite;
+      font-size: 3rem;
+      height: 60px;
+      width: 60px;
+      border: 6px solid rgba(255, 255, 255, 0.2);
+      border-top: 6px solid #3b82f6;
+      border-radius: 50%;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .indicator-message {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: #e5e7eb;
+      margin-top: 20px;
+    }
+    .indicator-icon {
+      font-size: 4rem;
+      color: #3b82f6;
+      margin-bottom: 15px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    .progress-container {
+      background: #1f2937;
+      padding: 20px;
+      border-radius: 10px;
+      width: 350px;
+      text-align: center;
+    }
+    #search-bar {
+      background-color: rgba(31, 41, 55, 0.95);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      z-index: 20;
+    }
+    #search-input {
+      transition: width 0.3s ease-in-out;
+      color: #e5e7eb;
+      width: 100%;
+    }
+    #close-search:hover {
+      transform: scale(1.1);
+      color: #f87171;
+    }
+    .image-preview {
+      transition: transform 0.2s ease;
+    }
+    .image-preview:hover {
+      transform: scale(1.05);
+    }
+    .speed-indicator {
+      font-size: 0.875rem;
+      color: #60a5fa;
+      margin-top: 8px;
+    }
+    .eta-indicator {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    .chunk-progress {
+      font-size: 0.75rem;
+      color: #10b981;
+      margin-top: 4px;
+    }
+    .progress-details {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 0.75rem;
+    }
+    .realtime-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #10b981;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.625rem;
+      animation: pulse 1.5s infinite;
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen bg-gray-900 text-white">
+  <!-- Header -->
+  <header class="bg-gray-800 py-4 px-6 flex justify-between items-center shadow-md fixed top-0 w-full z-10">
+    <div class="flex items-center space-x-4">
+      <button id="back-button" class="text-gray-400 hover:text-white header-icon" aria-label="Go back">
+        <i class="fas fa-arrow-left text-2xl"></i>
+      </button>
+      <div class="flex items-center space-x-2">
+        <img id="forumAvatar" src="https://via.placeholder.com/40" alt="room" class="w-10 h-10 rounded-full" />
+        <div>
+          <h1 id="dynamic-room-name" class="text-xl font-bold"></h1>
+        </div>
+      </div>
+    </div>
+    <div class="flex space-x-4">
+      <button id="toggle-search" class="text-gray-400 hover:text-white header-icon" aria-label="Search">
+        <i class="fas fa-search text-2xl"></i>
+      </button>
+      <button id="options-button" class="text-gray-400 hover:text-white header-icon" aria-label="More options">
+        <i class="fas fa-ellipsis-v text-2xl"></i>
+      </button>
+      <div id="options-menu" class="hidden absolute right-6 mt-12 bg-gray-700 text-white rounded-lg shadow-lg py-2">
+        <a href="#" id="logout-button" class="block px-4 py-2 hover:bg-gray-600">Logout</a>
+      </div>
+    </div>
+  </header>
+  <!-- Search Bar -->
+  <div id="search-bar" class="fixed top-0 left-0 w-full bg-gray-800 p-4 shadow-md transform -translate-y-full transition-transform duration-300 ease-in-out z-20">
+    <div class="flex items-center space-x-2">
+      <button id="search-button" class="text-gray-400 hover:text-white transition duration-300" aria-label="Search">
+        <i class="fas fa-search text-2xl"></i>
+      </button>
+      <input type="text" id="search-input" placeholder="Search messages or files..." class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <button id="close-search" class="text-gray-400 hover:text-white transition duration-300" aria-label="Close search">
+        <i class="fas fa-times text-2xl"></i>
+      </button>
+    </div>
+  </div>
+  <!-- Chat Container -->
+  <div class="flex flex-col flex-1 overflow-hidden pt-16 pb-20">
+    <div id="chat-box" class="flex-1 overflow-y-auto p-4"></div>
+  </div>
+  <!-- Message Input -->
+  <div class="bg-gray-800 p-3 flex items-center shadow-md fixed bottom-0 w-full z-10">
+    <button id="attach-file" class="text-gray-400 hover:text-white mr-4" aria-label="Attach file">
+      <i class="fas fa-paperclip text-2xl"></i>
+    </button>
+    <textarea id="message-input" placeholder="Type a message..." class="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="1"></textarea>
+    <input type="file" id="file-input" class="hidden" />
+    <button id="send-message" class="bg-blue-500 text-white px-4 py-2 rounded-full ml-4 hover:bg-blue-400 transition duration-300" aria-label="Send message">
+      <i class="fas fa-paper-plane"></i>
+    </button>
+  </div>
+  <!-- Text Message Sending Indicator -->
+  <div id="text-sending-indicator" class="sending-indicator">
+    <div class="flex flex-col items-center">
+      <i class="fas fa-comments indicator-icon"></i>
+      <div class="sending-spinner"></div>
+      <p class="indicator-message">Sending your message...</p>
+    </div>
+  </div>
+  <!-- Enhanced File Uploading Indicator -->
+  <div id="file-sending-indicator" class="sending-indicator">
+    <div class="progress-container">
+      <div class="realtime-indicator">LIVE</div>
+      <div class="text-blue-400 mb-4">
+        <i class="fas fa-file-upload text-6xl"></i>
+      </div>
+      <div id="file-name-text" class="text-white mb-2 font-semibold"></div>
+      <div class="relative pt-1">
+        <div class="flex mb-2 items-center justify-between">
+          <div>
+            <span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
+              Uploading File
+            </span>
+          </div>
+          <div class="text-right">
+            <span id="progress-text" class="text-xs font-semibold inline-block text-blue-600">0% (0 MB of 0 MB)</span>
+          </div>
+        </div>
+        <div class="overflow-hidden h-3 mb-4 text-xs flex rounded bg-blue-200">
+          <div id="progress-bar" style="width:0%" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500 transition-all duration-300"></div>
+        </div>
+      </div>
+      <div class="progress-details">
+        <div>
+          <div id="speed-display" class="speed-indicator">Speed: 0 MB/s</div>
+          <div id="eta-display" class="eta-indicator">ETA: Calculating...</div>
+        </div>
+        <div>
+          <div id="chunk-display" class="chunk-progress">Chunks: 0/0</div>
+        </div>
+      </div>
+      <p class="text-gray-400 text-sm mt-4">Ultra-fast streaming upload in progress...</p>
+    </div>
+  </div>
+  <!-- Enhanced File Downloading Indicator -->
+  <div id="file-downloading-indicator" class="sending-indicator">
+    <div class="progress-container">
+      <div class="realtime-indicator">LIVE</div>
+      <div class="text-blue-400 mb-4">
+        <i class="fas fa-file-download text-6xl"></i>
+      </div>
+      <div id="download-file-name-text" class="text-white mb-2 font-semibold"></div>
+      <div class="relative pt-1">
+        <div class="flex mb-2 items-center justify-between">
+          <div>
+            <span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-green-600 bg-green-200">
+              Downloading File
+            </span>
+          </div>
+          <div class="text-right">
+            <span id="download-progress-text" class="text-xs font-semibold inline-block text-green-600">0% (0 MB of 0 MB)</span>
+          </div>
+        </div>
+        <div class="overflow-hidden h-3 mb-4 text-xs flex rounded bg-green-200">
+          <div id="download-progress-bar" style="width:0%" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500 transition-all duration-300"></div>
+        </div>
+      </div>
+      <div class="progress-details">
+        <div>
+          <div id="download-speed-display" class="speed-indicator text-green-400">Speed: 0 MB/s</div>
+          <div id="download-eta-display" class="eta-indicator">ETA: Calculating...</div>
+        </div>
+        <div>
+          <div id="download-chunk-display" class="chunk-progress text-green-400">Chunk: 0/0</div>
+        </div>
+      </div>
+      <p class="text-gray-400 text-sm mt-4">Ultra-fast streaming download in progress...</p>
+    </div>
+  </div>
+  <!-- Video Modal -->
+  <div id="videoModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden transition-opacity duration-300 ease-in-out">
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-3xl mx-4 sm:mx-6 lg:mx-8 xl:mx-auto">
+      <div class="video-container flex flex-col items-center">
+        <video id="videoPlayer" class="rounded-md mt-4 shadow-lg w-full h-auto max-h-80 sm:max-h-96 lg:max-h-120" controls preload="auto">
+          <source src="" type="video/mp4" />
+        </video>
+      </div>
+      <div class="flex flex-col sm:flex-row justify-between items-center mt-4 space-y-4 sm:space-y-0">
+        <a id="downloadVideo" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400" download>
+          <i class="fas fa-download mr-2"></i> Download
+        </a>
+        <button id="closeVideoModal" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-400">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- External Libraries -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://js.pusher.com/7.0/pusher.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+  <script>
+
+
+    /* Enhanced Configuration */
+    const SERVER_URL = "http://localhost:3000"; // ← UPDATE THIS
+    const CHUNK_CONCURRENCY = 12; // Increased parallel downloads
+    const PROGRESS_UPDATE_THROTTLE = 100; // ms
+    const REAL_TIME_UPDATES = true;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js";
+    
+    const roomName = localStorage.getItem("roomName");
+    if (!roomName) {
+      alert("No room specified. Redirecting to home page.");
+      window.location.href = "/";
+    }
+      function supportsFileSystem() {
+    return 'showSaveFilePicker' in window;
+  }  
+  function updateDownloadUI(progress, loaded, total, startTime) {
+    const pct = progress !== null ? progress.toFixed(1) : 0;
+    document.getElementById("download-progress-bar").style.width = `${pct}%`;
+    document.getElementById("download-progress-text").textContent =
+      total
+        ? `${pct}% (${(loaded/1048576).toFixed(2)} MB of ${(total/1048576).toFixed(2)} MB)`
+        : `${(loaded/1048576).toFixed(2)} MB`;
+    if (startTime && total) {
+      const elapsed = (Date.now() - startTime) / 1000; // seconds
+      const speed  = loaded / elapsed; // bytes/sec
+      document.getElementById("download-speed-display").textContent =
+        `Speed: ${(speed/1048576).toFixed(2)} MB/s`;
+      const eta = speed > 0 ? (total - loaded) / speed : null;
+      if (eta) {
+        const m = Math.floor(eta/60), s = Math.floor(eta%60);
+        document.getElementById("download-eta-display").textContent =
+          `ETA: ${m}m ${s}s`;
+      }
+    }
+  }
+   async function streamDownload(fileId, fileName) {
+    const indicator = document.getElementById("file-downloading-indicator");
+    const fileNameEl= document.getElementById("download-file-name-text");
+    indicator.classList.add("active");
+    fileNameEl.textContent = fileName;
+
+    try {
+      // 1) Fetch metadata
+      const metaRes = await fetch(
+        `${SERVER_URL}/room/${encodeURIComponent(roomName)}/get-file-metadata/${fileId}`
+      );
+      if (!metaRes.ok) throw new Error(`Metadata ${metaRes.status}`);
+      const { totalChunks, totalSize } = await metaRes.json();
+
+      // 2) Prepare writer
+      let fsStream = null, writer = null;
+
+      if (supportsFileSystem()) {
+        // File System Access API
+        const handle   = await window.showSaveFilePicker({ suggestedName: fileName });
+        fsStream = await handle.createWritable();
+      }
+      else if (window.streamSaver) {
+        // Streamsaver fallback
+        fsStream = streamSaver.createWriteStream(fileName, { size: totalSize });
+        writer   = fsStream.getWriter();
+      }
+      // else: final blob fallback will collect chunks
+
+      // 3) Download chunks one by one
+      let loaded = 0;
+      const startTs = Date.now();
+      window._fallbackChunks = [];
+
+      for (let idx = 0; idx < totalChunks; idx++) {
+        const chunkRes = await fetch(
+          `${SERVER_URL}/room/${encodeURIComponent(roomName)}/get-file-chunk/${fileId}?index=${idx}`
+        );
+        if (!chunkRes.ok) throw new Error(`Chunk ${idx} ${chunkRes.status}`);
+        const buffer = await chunkRes.arrayBuffer();
+
+        if (fsStream && supportsFileSystem()) {
+          // Native FS API write
+          await fsStream.write(buffer);
+        }
+        else if (writer) {
+          // Streamsaver write
+          await writer.write(new Uint8Array(buffer));
+        }
+        else {
+          // Blob fallback
+          window._fallbackChunks.push(buffer);
+        }
+
+        loaded += buffer.byteLength;
+        updateDownloadUI(loaded, totalSize, startTs, idx, totalChunks);
+      }
+
+      // 4) Close writer/stream
+      if (fsStream && supportsFileSystem()) {
+        await fsStream.close();
+      }
+      else if (writer) {
+        await writer.close();
+      }
+      else {
+        // Blob fallback
+        const blob = new Blob(window._fallbackChunks);
+        delete window._fallbackChunks;
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href     = url;
+        a.download = fileName;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }
+
+      showNotification(`Downloaded "${fileName}" successfully!`, "success");
+    }
+    catch (err) {
+      console.error("Download error:", err);
+      showNotification(`Error downloading file: ${err.message}`, "error", 5000);
+    }
+    finally {
+      // Reset UI
+      indicator.classList.remove("active");
+      document.getElementById("download-progress-bar").style.width = "0%";
+      document.getElementById("download-progress-text").textContent = "0% (0 MB of 0 MB)";
+      document.getElementById("download-speed-display").textContent = "Speed: 0 MB/s";
+      document.getElementById("download-eta-display").textContent = "ETA: Calculating...";
+      document.getElementById("download-chunk-display").textContent = "Chunk: 0/0";
+      document.title = "Infinity Share";
+    }
+  }
+
+
+
+    // Enhanced Socket.IO with better error handling
+    const socket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      rememberUpgrade: true,
+      timeout: 20000,
+      forceNew: true
+    });
+    
+    socket.on("connect", () => {
+      console.log("Socket.IO connected with id:", socket.id);
+      socket.emit("join-room", roomName);
+    });
+    
+    socket.on("connect_error", (err) => {
+      console.error("Socket.IO connection error:", err);
+      showNotification("Connection error. Retrying...", "error");
+    });
+    
+    socket.on("disconnect", (reason) => {
+      console.log("Socket.IO disconnected:", reason);
+      if (reason === 'io server disconnect') {
+        socket.connect();
+      }
+    });
+  async function fetchMetadata(fileId) {
+    const metaRes = await fetch(`${SERVER_URL}/room/${encodeURIComponent(roomName)}/get-file-metadata/${fileId}`);
+    if (!metaRes.ok) throw new Error("Failed to load file metadata");
+    return await metaRes.json(); // { totalChunks, totalSize, fileName, mimeType }
+  }
+    async function fetchChunk(fileId, index) {
+    const res = await fetch(
+      `${SERVER_URL}/room/${encodeURIComponent(roomName)}/get-file-chunk/${fileId}?index=${index}`
+    );
+    if (!res.ok) throw new Error(`Chunk ${index} error`);
+    return await res.arrayBuffer();
+  }
+ let currentDownloadStart = 0;
+  async function handleFileAction(fileId, fileName, ext, action) {
+    try {
+      const indicator = document.getElementById("file-downloading-indicator");
+      const meta      = await fetchMetadata(fileId);
+      currentDownloadStart = Date.now();
+
+         if (action === "download") {
+      return streamDownload(fileId, fileName);
+    }
+
+      else if (action === "open") {
+        // small preview only
+        if (["jpg","jpeg","png","gif"].includes(ext) && meta.totalSize <= PREVIEW_THRESHOLD) {
+          const buffers = [];
+          for (let i=0;i<meta.totalChunks;i++){
+            buffers.push(new Uint8Array(await fetchChunk(fileId,i)));
+          }
+          const blob = new Blob(buffers, { type: getMimeType(ext) });
+          openInModal(URL.createObjectURL(blob));
+        }
+        else if (["mp4","webm","mov","avi"].includes(ext) && meta.totalSize <= PREVIEW_THRESHOLD) {
+          const buffers = [];
+          for (let i=0;i<meta.totalChunks;i++){
+            buffers.push(new Uint8Array(await fetchChunk(fileId,i)));
+          }
+          const blobUrl = URL.createObjectURL(new Blob(buffers, { type: getMimeType(ext) }));
+          openVideoInModal(blobUrl, fileName);
+        }
+        else if (ext === "pdf" && meta.totalSize <= PREVIEW_THRESHOLD) {
+          const buffers = [];
+          for (let i=0;i<meta.totalChunks;i++){
+            buffers.push(new Uint8Array(await fetchChunk(fileId,i)));
+          }
+          const blob = new Blob(buffers, { type: getMimeType(ext) });
+          const url  = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+        }
+        else {
+          if (confirm("Cannot preview this file. Download instead?")) {
+            indicator.classList.add("active");
+            await streamDownload(fileId, fileName, meta.totalSize, meta.totalChunks);
+          }
+        }
+      }
+
+    } catch(err) {
+      console.error("File action error:", err);
+      showNotification(err.message, "error", 5000);
+    } finally {
+      document.getElementById("file-downloading-indicator").classList.remove("active");
+      document.getElementById("download-progress-bar").style.width       = "0%";
+      document.getElementById("download-progress-text").textContent     = "0% (0/0)";
+      document.getElementById("download-speed-display").textContent     = "Speed: 0 MB/s";
+      document.getElementById("download-chunk-display").textContent     = "Chunk: 0/0";
+      document.title = "Infinity Share";
+    }
+  }
+
+
+
+    // Enhanced progress tracking variables
+    let currentUploadProgress = {
+      fileId: null,
+      fileName: '',
+      startTime: null,
+      lastUpdate: Date.now(),
+      speedSamples: [],
+      chunkProgress: new Map()
+    };
+
+    let currentDownloadProgress = {
+      fileId: null,
+      fileName: '',
+      startTime: null,
+      lastUpdate: Date.now(),
+      speedSamples: [],
+      chunkProgress: new Map()
+    };
+    
+    // Enhanced upload progress handler with throttling
+    let progressUpdateTimer = null;
+    socket.on("upload-progress", function(data) {
+      if (progressUpdateTimer) return; // Throttle updates
+      
+      progressUpdateTimer = setTimeout(() => {
+        progressUpdateTimer = null;
+      }, PROGRESS_UPDATE_THROTTLE);
+
+      console.log("Enhanced upload progress:", data);
+      updateUploadProgress(data);
+    });
+
+    // Real-time progress handler for immediate updates
+    socket.on("real-time-progress", function(data) {
+      if (REAL_TIME_UPDATES) {
+        updateRealTimeProgress(data);
+      }
+    });
+
+    // Chunk completion handler
+    socket.on("chunk-complete", function(data) {
+      console.log("Chunk completed:", data);
+      if (currentUploadProgress.chunkProgress.has(data.chunkIndex)) {
+        currentUploadProgress.chunkProgress.set(data.chunkIndex, 100);
+      }
+      showNotification(`Chunk ${data.chunkIndex + 1} uploaded successfully`, "success", 2000);
+    });
+
+    // Enhanced upload completion handler
+    socket.on("file-upload-complete", function(data) {
+      console.log("File upload completed:", data);
+      
+      setTimeout(() => {
+        document.getElementById("file-sending-indicator").classList.remove("active");
+        resetProgressIndicators();
+        document.title = "Infinity Share";
+        showNotification(`File "${data.fileName}" uploaded successfully!`, "success", 5000);
+        loadContent(); // Refresh content
+      }, 1000);
+    });
+
+    // Error handlers
+    socket.on("upload-error", function(data) {
+      console.error("Upload error:", data);
+      showNotification(`Upload error: ${data.error}`, "error", 5000);
+    });
+
+    socket.on("file-upload-error", function(data) {
+      console.error("File upload error:", data);
+      document.getElementById("file-sending-indicator").classList.remove("active");
+      resetProgressIndicators();
+      showNotification(`File upload failed: ${data.error}`, "error", 5000);
+    });
+
+    // Enhanced download progress handler
+    socket.on("download-progress", function(data) {
+      updateDownloadProgress(data);
+    });
+
+    function updateUploadProgress(data) {
+      const progressBar = document.getElementById("progress-bar");
+      const progressText = document.getElementById("progress-text");
+      const speedDisplay = document.getElementById("speed-display");
+      const etaDisplay = document.getElementById("eta-display");
+      const chunkDisplay = document.getElementById("chunk-display");
+      
+      // Update basic progress
+      progressBar.style.width = `${Math.min(100, data.progress)}%`;
+      progressText.textContent = `${data.progress.toFixed(1)}% (${data.uploadedMB} MB of ${data.totalSizeMB} MB)`;
+      
+      // Update chunks
+      chunkDisplay.textContent = `Chunks: ${data.uploadedChunks}/${data.totalChunks}`;
+      
+      // Calculate and display speed
+      const now = Date.now();
+      if (data.speed && data.speed > 0) {
+        const speedMBs = (data.speed / (1024 * 1024)).toFixed(2);
+        speedDisplay.textContent = `Speed: ${speedMBs} MB/s`;
+        
+        // Calculate ETA
+        if (data.eta && data.eta > 0) {
+          const etaMinutes = Math.floor(data.eta / 60);
+          const etaSeconds = Math.floor(data.eta % 60);
+          etaDisplay.textContent = `ETA: ${etaMinutes}m ${etaSeconds}s`;
+        } else {
+          etaDisplay.textContent = "ETA: Calculating...";
+        }
+      }
+      
+      // Update browser title with progress
+      document.title = `Uploading: ${data.progress.toFixed(1)}% - Infinity Share`;
+      
+      // Store progress info
+      currentUploadProgress.fileId = data.fileId;
+      currentUploadProgress.fileName = data.fileName;
+      currentUploadProgress.lastUpdate = now;
+    }
+
+    function updateRealTimeProgress(data) {
+      // Real-time updates for individual chunks
+      if (data.chunkIndex !== undefined) {
+        const chunkKey = `chunk_${data.chunkIndex}`;
+        currentUploadProgress.chunkProgress.set(data.chunkIndex, data.chunkProgress || 0);
+        
+        // Show mini notification for chunk progress
+        if (data.chunkProgress >= 100) {
+          showMiniNotification(`Chunk ${data.chunkIndex + 1} complete`, "success");
+        }
+      }
+    }
+
+    function updateDownloadProgress(data) {
+      const progressBar = document.getElementById("download-progress-bar");
+      const progressText = document.getElementById("download-progress-text");
+      const speedDisplay = document.getElementById("download-speed-display");
+      const etaDisplay = document.getElementById("download-eta-display");
+      const chunkDisplay = document.getElementById("download-chunk-display");
+      
+      progressBar.style.width = `${Math.min(100, data.progress)}%`;
+      progressText.textContent = `${data.progress.toFixed(1)}% (${data.downloadedMB} MB of ${data.totalMB} MB)`;
+      
+      if (data.chunkIndex !== undefined) {
+        chunkDisplay.textContent = `Chunk: ${data.chunkIndex + 1}`;
+      }
+      
+      // Calculate speed if available
+      if (data.speed && data.speed > 0) {
+        const speedMBs = (data.speed / (1024 * 1024)).toFixed(2);
+        speedDisplay.textContent = `Speed: ${speedMBs} MB/s`;
+      }
+      
+      // Update browser title
+      document.title = `Downloading: ${data.progress.toFixed(1)}% - Infinity Share`;
+    }
+
+    function resetProgressIndicators() {
+      document.getElementById("progress-bar").style.width = "0%";
+      document.getElementById("progress-text").textContent = "0% (0 MB of 0 MB)";
+      document.getElementById("speed-display").textContent = "Speed: 0 MB/s";
+      document.getElementById("eta-display").textContent = "ETA: Calculating...";
+      document.getElementById("chunk-display").textContent = "Chunks: 0/0";
+      
+      document.getElementById("download-progress-bar").style.width = "0%";
+      document.getElementById("download-progress-text").textContent = "0% (0 MB of 0 MB)";
+      document.getElementById("download-speed-display").textContent = "Speed: 0 MB/s";
+      document.getElementById("download-eta-display").textContent = "ETA: Calculating...";
+      document.getElementById("download-chunk-display").textContent = "Chunk: 0/0";
+      
+      currentUploadProgress = {
+        fileId: null,
+        fileName: '',
+        startTime: null,
+        lastUpdate: Date.now(),
+        speedSamples: [],
+        chunkProgress: new Map()
+      };
+      
+      currentDownloadProgress = {
+        fileId: null,
+        fileName: '',
+        startTime: null,
+        lastUpdate: Date.now(),
+        speedSamples: [],
+        chunkProgress: new Map()
+      };
+    }
+    
+    // Enhanced notification system
+    function showNotification(message, type = "info", duration = 3000) {
+      const notification = document.createElement("div");
+      notification.className = `fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg text-white max-w-sm transition-all duration-300 transform translate-x-full`;
+      
+      switch (type) {
+        case "success":
+          notification.classList.add("bg-green-600");
+          break;
+        case "error":
+          notification.classList.add("bg-red-600");
+          break;
+        case "warning":
+          notification.classList.add("bg-yellow-600");
+          break;
+        default:
+          notification.classList.add("bg-blue-600");
+      }
+      
+      notification.innerHTML = `
+        <div class="flex items-center">
+          <div class="flex-1">${message}</div>
+          <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Animate in
+      setTimeout(() => {
+        notification.classList.remove("translate-x-full");
+      }, 100);
+      
+      // Auto remove
+      setTimeout(() => {
+        notification.classList.add("translate-x-full");
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.remove();
+          }
+        }, 300);
+      }, duration);
+    }
+
+    function showMiniNotification(message, type = "info") {
+      const mini = document.createElement("div");
+      mini.className = `fixed top-4 left-1/2 transform -translate-x-1/2 z-40 px-3 py-1 rounded-full text-xs text-white transition-all duration-500 opacity-0`;
+      
+      switch (type) {
+        case "success":
+          mini.classList.add("bg-green-500");
+          break;
+        case "error":
+          mini.classList.add("bg-red-500");
+          break;
+        default:
+          mini.classList.add("bg-blue-500");
+      }
+      
+      mini.textContent = message;
+      document.body.appendChild(mini);
+      
+      setTimeout(() => mini.classList.remove("opacity-0"), 100);
+      setTimeout(() => {
+        mini.classList.add("opacity-0");
+        setTimeout(() => mini.remove(), 500);
+      }, 2000);
+    }
+    
+    // Set up Pusher
+    Pusher.logToConsole = false;
+    const pusher = new Pusher('d187547f8eaf3e9449f4', {
+      cluster: 'ap2',
+      forceTLS: true
+    });
+    const pusherChannel = pusher.subscribe(roomName);
+    pusherChannel.bind("new-content", function (data) {
+      console.log("Pusher new-content event:", data);
+      loadContent();
+      if (data.type === "file") {
+        showNotification(`New file: ${data.fileName}`, "info");
+      }
+    });
+    
+    // DOM element references
+    const chatBox = document.getElementById("chat-box");
+    
+    async function loadContent() {
+      try {
+        const response = await fetch(SERVER_URL + `/room/${encodeURIComponent(roomName)}/get-content?limit=50`);
+        if (!response.ok) throw new Error("Failed to load content");
+        const { content } = await response.json();
+        chatBox.innerHTML = "";
+        content.forEach(item => {
+          const container = document.createElement("div");
+          container.className = "chat-message received";
+          if (item.type === "message") {
+            const safeMsg = escapeHtml(item.message)
+              .replace(/\r?\n/g, "<br>")
+              .replace(/ /g, "&nbsp;");
+            container.innerHTML = `<p>${safeMsg}</p><div class="message-date">${new Date(item.created_at).toLocaleString()}</div>`;
+          } else if (item.type === "file") {
+            createFilePreview(item.file_id, item.file_name, item.preview, item.created_at, container, item.file_size, item.is_complete);
+          }
+          chatBox.appendChild(container);
+        });
+        scrollToBottom();
+      } catch (error) {
+        console.error("Error loading content:", error);
+        showNotification("Error loading content", "error");
+      }
+    }
+    
+    // Enhanced IndexedDB with better error handling
+    const DB_NAME = "InfinityShareDB_v2";
+    const STORE_NAME = "files";
+    async function initIndexedDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 2);
+        request.onupgradeneeded = event => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { keyPath: "fileId" });
+            store.createIndex("timestamp", "timestamp", { unique: false });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject("Failed to initialize IndexedDB: " + request.error);
+      });
+    }
+    
+    async function storeInIndexedDB(fileId, data) {
+      try {
+        const db = await initIndexedDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], "readwrite");
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.put({ 
+            fileId, 
+            data, 
+            timestamp: Date.now(),
+            size: data.length 
+          });
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject("Failed to store in IndexedDB: " + request.error);
+        });
+      } catch (error) {
+        console.warn("IndexedDB storage failed:", error);
+      }
+    }
+    
+    async function retrieveFromIndexedDB(fileId) {
+      try {
+        const db = await initIndexedDB();
+        return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], "readonly");
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.get(fileId);
+          request.onsuccess = () => resolve(request.result?.data || null);
+          request.onerror = () => reject("Failed to retrieve from IndexedDB: " + request.error);
+        });
+      } catch (error) {
+        console.warn("IndexedDB retrieval failed:", error);
+        return null;
+      }
+    }
+    
+    function getLocalStorageUsage() {
+      let total = 0;
+      for (const key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+          total += (localStorage[key].length + key.length) * 2;
+        }
+      }
+      return total / (1024 * 1024);
+    }
+    
+    // Enhanced file retrieval with streaming support
+    async function retrieveFullFile(fileId, fileName, onProgress) {
+      const storageKey = `file_${fileId}`;
+      
+      // Check localStorage first
+      let cached = localStorage.getItem(storageKey);
+      if (cached) {
+        console.log("Retrieved from localStorage");
+        return cached;
+      }
+      
+      // Check IndexedDB
+      cached = await retrieveFromIndexedDB(fileId);
+      if (cached) {
+        console.log("Retrieved from IndexedDB");
+        return cached;
+      }
+      
+      try {
+        // Get file metadata
+        const metaRes = await fetch(SERVER_URL + `/room/${encodeURIComponent(roomName)}/get-file-metadata/${fileId}`);
+        if (!metaRes.ok) {
+          const err = await metaRes.json();
+          throw new Error(err.error || "Failed to fetch metadata");
+        }
+        const { totalChunks, totalSize, fileName: metaFileName } = await metaRes.json();
+        
+        console.log(`Downloading ${metaFileName}: ${totalChunks} chunks, ${(totalSize / (1024*1024)).toFixed(2)}MB`);
+        
+        const chunks = new Array(totalChunks).fill(null);
+        let fetchedBytes = 0;
+        const startTime = Date.now();
+        
+        // Enhanced chunk fetching with retry logic
+        const fetchChunk = async (index, retries = 3) => {
+          for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+              
+              const res = await fetch(
+                SERVER_URL + `/room/${encodeURIComponent(roomName)}/get-file-chunk/${fileId}?index=${index}`,
+                { signal: controller.signal }
+              );
+              
+              clearTimeout(timeoutId);
+              
+              if (!res.ok) throw new Error(`Failed to fetch chunk ${index}: ${res.status}`);
+              
+              const buffer = await res.arrayBuffer();
+              fetchedBytes += buffer.byteLength;
+              
+              // Enhanced progress reporting
+              const progress = (fetchedBytes / totalSize) * 100;
+              const elapsed = (Date.now() - startTime) / 1000;
+              const speed = elapsed > 0 ? fetchedBytes / elapsed : 0;
+              
+              if (onProgress) {
+                onProgress(fetchedBytes, totalSize, {
+                  chunkIndex: index,
+                  totalChunks,
+                  progress,
+                  speed,
+                  eta: speed > 0 ? (totalSize - fetchedBytes) / speed : null
+                });
+              }
+              
+              return { index, buffer };
+            } catch (err) {
+              console.warn(`Chunk ${index} attempt ${attempt} failed:`, err.message);
+              if (attempt === retries) throw err;
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+          }
+        };
+        
+        // Download chunks with enhanced concurrency
+        const results = [];
+        for (let i = 0; i < totalChunks; i += CHUNK_CONCURRENCY) {
+          const chunkGroup = Array.from({ length: Math.min(CHUNK_CONCURRENCY, totalChunks - i) }, (_, idx) => i + idx);
+          const groupResults = await Promise.all(chunkGroup.map(index => fetchChunk(index)));
+          results.push(...groupResults);
+          
+          // Small delay between batches to avoid overwhelming the server
+          if (i + CHUNK_CONCURRENCY < totalChunks) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+        
+        // Combine chunks in order
+        results.forEach(({ index, buffer }) => { 
+          chunks[index] = new Uint8Array(buffer); 
+        });
+        
+        const totalLength = chunks.reduce((sum, chunk) => sum + (chunk ? chunk.length : 0), 0);
+        const combined = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          if (!chunk) throw new Error("Missing chunk detected");
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        }
+        
+        const base64Str = uint8ToBase64(combined);
+        
+        // Enhanced caching strategy
+        try {
+          const fileSizeMB = totalLength / (1024 * 1024);
+          const currentLSMB = getLocalStorageUsage();
+          
+          if (fileSizeMB < 2 && (currentLSMB + fileSizeMB) < 5) {
+            localStorage.setItem(storageKey, base64Str);
+            console.log("Cached in localStorage");
+          } else if (fileSizeMB < 100) {
+            await storeInIndexedDB(fileId, base64Str);
+            console.log("Cached in IndexedDB");
+          }
+        } catch (cacheError) {
+          console.warn("Failed to cache file:", cacheError.message);
+        }
+        
+        return base64Str;
+      } catch (err) {
+        throw new Error(`Failed to retrieve file: ${err.message}`);
+      }
+    }
+    
+    function uint8ToBase64(u8Arr) {
+      const CHUNK_SIZE = 0x8000;
+      let index = 0, result = "";
+      while (index < u8Arr.length) {
+        const slice = u8Arr.subarray(index, Math.min(index + CHUNK_SIZE, u8Arr.length));
+        result += String.fromCharCode.apply(null, slice);
+        index += CHUNK_SIZE;
+      }
+      return btoa(result);
+    }
+    
+    function base64ToBlob(base64, mime) {
+      const byteStr = atob(base64);
+      const buf = new ArrayBuffer(byteStr.length);
+      const u8Arr = new Uint8Array(buf);
+      for (let i = 0; i < byteStr.length; i++) {
+        u8Arr[i] = byteStr.charCodeAt(i);
+      }
+      return new Blob([buf], { type: mime });
+    }
+    
+    function constructDataUrl(base64Str, mime) {
+      return `data:${mime};base64,${base64Str}`;
+    }
+    
+    function getMimeType(ext) {
+      const lookup = {
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+        mp4: "video/mp4", avi: "video/avi", mov: "video/quicktime", webm: "video/webm",
+        pdf: "application/pdf", txt: "text/plain", doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        zip: "application/zip", rar: "application/x-rar-compressed"
+      };
+      return lookup[ext.toLowerCase()] || "application/octet-stream";
+    }
+    
+    function loadStoredRoomInfo() {
+      const roomStored = localStorage.getItem("roomName");
+      const forumImg = localStorage.getItem("forumImage");
+      if (roomStored) {
+        document.getElementById("dynamic-room-name").textContent = roomStored;
+      } else {
+        window.location.href = "/";
+      }
+      if (forumImg) {
+        document.getElementById("forumAvatar").src = `data:image/png;base64,${forumImg}`;
+      }
+    }
+    
+    function escapeHtml(unsafe) {
+      return unsafe.replace(/&/g, "&amp;")
+                   .replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;")
+                   .replace(/'/g, "&#039;");
+    }
+    
+    function scrollToBottom() {
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    
+    // Enhanced file preview with progress indicators
+    async function createFilePreview(fileId, fileName, previewBase64, timestamp, container, fileSize = 0, isComplete = true) {
+      const previewEl = document.createElement("div");
+      previewEl.className = "file-preview bg-gray-800 p-4 rounded-lg shadow-md transition transform hover:translate-y-[-2px] hover:shadow-xl mb-4";
+      
+      const nameEl = document.createElement("div");
+      nameEl.textContent = fileName;
+      nameEl.className = "font-bold text-lg text-white mb-2";
+      previewEl.appendChild(nameEl);
+      
+      // File size and status indicator
+      if (fileSize > 0) {
+        const sizeEl = document.createElement("div");
+        sizeEl.className = "text-sm text-gray-400 mb-2";
+        const sizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+        const statusText = isComplete ? "✓ Complete" : "⚠ Incomplete";
+        const statusClass = isComplete ? "text-green-400" : "text-yellow-400";
+        sizeEl.innerHTML = `${sizeMB} MB • <span class="${statusClass}">${statusText}</span>`;
+        previewEl.appendChild(sizeEl);
+      }
+      
+      const dateEl = document.createElement("div");
+      dateEl.className = "message-date text-xs text-gray-400";
+      dateEl.textContent = new Date(timestamp).toLocaleString();
+      previewEl.appendChild(dateEl);
+      
+      const imgContainer = document.createElement("div");
+      imgContainer.className = "flex justify-center mb-4";
+      
+      const ext = fileName.toLowerCase().split(".").pop();
+      if (["jpg", "jpeg", "png", "gif"].includes(ext) && previewBase64) {
+        const imgEl = document.createElement("img");
+        imgEl.src = `data:image/png;base64,${previewBase64}`;
+        imgEl.className = "w-48 max-h-48 sm:w-64 sm:max-h-64 object-contain rounded-md border border-gray-600 shadow-sm image-preview cursor-pointer";
+        imgEl.onclick = () => handleFileAction(fileId, fileName, ext, "open");
+        imgContainer.appendChild(imgEl);
+      } else {
+        const iconContainer = document.createElement("div");
+        iconContainer.className = "text-center";
+        const icon = document.createElement("i");
+        
+        // Enhanced file type icons
+        if (["mp4", "avi", "mov", "webm"].includes(ext)) {
+          icon.className = "fas fa-play-circle text-6xl text-red-500";
+        } else if (ext === "pdf") {
+          icon.className = "fas fa-file-pdf text-6xl text-red-600";
+        } else if (["zip", "rar", "7z"].includes(ext)) {
+          icon.className = "fas fa-file-archive text-6xl text-yellow-600";
+        } else if (["doc", "docx"].includes(ext)) {
+          icon.className = "fas fa-file-word text-6xl text-blue-600";
+        } else if (["txt", "log"].includes(ext)) {
+          icon.className = "fas fa-file-alt text-6xl text-gray-500";
+        } else {
+          icon.className = "fas fa-file text-6xl text-gray-500";
+        }
+        
+        iconContainer.appendChild(icon);
+        imgContainer.appendChild(iconContainer);
+      }
+      previewEl.appendChild(imgContainer);
+      
+      const btnContainer = document.createElement("div");
+      btnContainer.className = "flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3";
+      
+      const openBtn = document.createElement("button");
+      openBtn.className = "flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg transition duration-300 w-full sm:w-auto";
+      openBtn.innerHTML = '<i class="fas fa-eye mr-2"></i> Open';
+      openBtn.onclick = () => handleFileAction(fileId, fileName, ext, "open");
+      
+      const downloadBtn = document.createElement("button");
+      downloadBtn.className = "flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-lg transition duration-300 w-full sm:w-auto";
+      downloadBtn.innerHTML = '<i class="fas fa-download mr-2"></i> Download';
+      downloadBtn.onclick = () => handleFileAction(fileId, fileName, ext, "download");
+      
+      // Disable buttons if file is incomplete
+      if (!isComplete) {
+        openBtn.disabled = true;
+        downloadBtn.disabled = true;
+        openBtn.className += " opacity-50 cursor-not-allowed";
+        downloadBtn.className += " opacity-50 cursor-not-allowed";
+        openBtn.innerHTML = '<i class="fas fa-clock mr-2"></i> Processing...';
+      }
+      
+      btnContainer.appendChild(openBtn);
+      btnContainer.appendChild(downloadBtn);
+      previewEl.appendChild(btnContainer);
+      container.appendChild(previewEl);
+    }
+    
+    // Enhanced file action handler with better error handling
+    // async function handleFileAction(fileId, fileName, ext, action) {
+    //   const indicator = document.getElementById("file-downloading-indicator");
+    //   const downloadProgressBar = document.getElementById("download-progress-bar");
+    //   const downloadProgressText = document.getElementById("download-progress-text");
+    //   const fileNameTxt = document.getElementById("download-file-name-text");
+    //   const downloadSpeedDisplay = document.getElementById("download-speed-display");
+    //   const downloadEtaDisplay = document.getElementById("download-eta-display");
+    //   const downloadChunkDisplay = document.getElementById("download-chunk-display");
+      
+    //   try {
+    //     fileNameTxt.textContent = fileName;
+    //     indicator.classList.add("active");
+    //     currentDownloadProgress.startTime = Date.now();
+        
+    //     const base64Str = await retrieveFullFile(fileId, fileName, (fetched, total, details) => {
+    //       const progress = (fetched / total) * 100;
+    //       downloadProgressBar.style.width = `${progress}%`;
+    //       downloadProgressText.textContent = `${progress.toFixed(1)}% (${(fetched / 1048576).toFixed(2)} MB of ${(total / 1048576).toFixed(2)} MB)`;
+          
+    //       if (details) {
+    //         if (details.speed > 0) {
+    //           const speedMBs = (details.speed / (1024 * 1024)).toFixed(2);
+    //           downloadSpeedDisplay.textContent = `Speed: ${speedMBs} MB/s`;
+    //         }
+            
+    //         if (details.eta && details.eta > 0) {
+    //           const etaMinutes = Math.floor(details.eta / 60);
+    //           const etaSeconds = Math.floor(details.eta % 60);
+    //           downloadEtaDisplay.textContent = `ETA: ${etaMinutes}m ${etaSeconds}s`;
+    //         }
+            
+    //         if (details.chunkIndex !== undefined) {
+    //           downloadChunkDisplay.textContent = `Chunk: ${details.chunkIndex + 1}/${details.totalChunks}`;
+    //         }
+    //       }
+          
+    //       // Update browser title
+    //       document.title = `Downloading: ${progress.toFixed(1)}% - Infinity Share`;
+    //     });
+        
+    //     const mime = getMimeType(ext);
+        
+    //     if (action === "open") {
+    //       if (["jpg", "jpeg", "png", "gif"].includes(ext)) {
+    //         openInModal(constructDataUrl(base64Str, mime));
+    //       } else if (["mp4", "avi", "mov", "webm"].includes(ext)) {
+    //         openVideoInModal(constructDataUrl(base64Str, mime), fileName);
+    //       } else if (ext === "pdf") {
+    //         const blob = base64ToBlob(base64Str, mime);
+    //         const blobUrl = URL.createObjectURL(blob);
+    //         const newTab = window.open(blobUrl, "_blank");
+    //         if (!newTab) {
+    //           if (confirm("Pop-ups blocked. Download instead?")) {
+    //             downloadFile(constructDataUrl(base64Str, mime), fileName);
+    //           }
+    //         } else {
+    //           setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    //         }
+    //       } else {
+    //         if (confirm(`Preview not supported for .${ext} files. Download instead?`)) {
+    //           downloadFile(constructDataUrl(base64Str, mime), fileName);
+    //         }
+    //       }
+    //     } else {
+    //       downloadFile(constructDataUrl(base64Str, mime), fileName);
+    //     }
+        
+    //     showNotification(`${action === "open" ? "Opened" : "Downloaded"} "${fileName}" successfully!`, "success");
+        
+    //   } catch (error) {
+    //     console.error(`Error ${action}ing file:`, error);
+    //     showNotification(`Error ${action === "open" ? "opening" : "downloading"} file: ${error.message}`, "error", 5000);
+    //   } finally {
+    //     indicator.classList.remove("active");
+    //     downloadProgressBar.style.width = "0%";
+    //     downloadProgressText.textContent = "0% (0 MB of 0 MB)";
+    //     downloadSpeedDisplay.textContent = "Speed: 0 MB/s";
+    //     downloadEtaDisplay.textContent = "ETA: Calculating...";
+    //     downloadChunkDisplay.textContent = "Chunk: 0/0";
+    //     document.title = "Infinity Share";
+    //   }
+    // }
+    
+      function getMimeType(ext) {
+    const m = {
+      jpg:"image/jpeg", jpeg:"image/jpeg", png:"image/png", gif:"image/gif",
+      mp4:"video/mp4", webm:"video/webm", mov:"video/quicktime", avi:"video/avi",
+      pdf:"application/pdf", txt:"text/plain", docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      zip:"application/zip", rar:"application/x-rar-compressed"
+    };
+    return m[ext.toLowerCase()]||"application/octet-stream";
+  }
+
+  function openInModal(src) {
+    const modal = document.createElement("div");
+    modal.className = "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50";
+    modal.innerHTML = `
+      <div class="bg-gray-800 p-6 rounded-lg text-center w-full max-w-4xl mx-4">
+        <img src="${src}" class="max-w-full max-h-96 rounded-md mx-auto"/>
+        <div class="mt-4 flex justify-center space-x-4">
+          <button onclick="downloadFile('${src}','image')" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">
+            <i class="fas fa-download mr-2"></i>Download
+          </button>
+          <button onclick="this.closest('div.fixed').remove()" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded">
+            Close
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => { if(e.target===modal) modal.remove(); });
+  }
+
+
+    
+    function openVideoInModal(videoUrl, fileName) {
+    const videoModal = document.getElementById("videoModal");
+    const player     = document.getElementById("videoPlayer");
+    const dlBtn      = document.getElementById("downloadVideo");
+
+    player.src         = videoUrl;
+    dlBtn.href         = videoUrl;
+    dlBtn.download     = fileName;
+    videoModal.classList.replace("hidden","flex");
+  }
+
+  function downloadFile(dataUrl, name) {
+    const a = document.createElement("a");
+    a.href    = dataUrl;
+    a.download= name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+    function downloadImageFromModal(src) {
+      const link = document.createElement('a');
+      link.href = src;
+      link.download = 'image';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    document.getElementById("closeVideoModal").addEventListener("click", () => {
+      const videoModal = document.getElementById("videoModal");
+      const videoPlayer = document.getElementById("videoPlayer");
+      videoModal.classList.add("hidden");
+      videoModal.classList.remove("flex");
+      videoPlayer.pause();
+      videoPlayer.src = "";
+    });
+    
+
+    
+    // Enhanced message sending
+    async function sendMessage(message) {
+      const textIndicator = document.getElementById("text-sending-indicator");
+      try {
+        textIndicator.classList.add("active");
+        const response = await fetch(SERVER_URL + `/room/${encodeURIComponent(roomName)}/post-message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to send message");
+        }
+        
+        document.getElementById("message-input").value = "";
+        showNotification("Message sent successfully!", "success", 2000);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error("Error sending message:", error);
+        showNotification("Error sending message: " + error.message, "error");
+      } finally {
+        textIndicator.classList.remove("active");
+      }
+    }
+    
+    // Enhanced file upload with validation
+    async function uploadFile(file) {
+      const fileIndicator = document.getElementById("file-sending-indicator");
+      
+      // Enhanced file validation
+      if (!file) {
+        showNotification("No file selected", "error");
+        return;
+      }
+      
+      if (file.size === 0) {
+        showNotification("Cannot upload empty files", "error");
+        return;
+      }
+      
+      const maxSize = 100 * 1024 * 1024 * 1024; // 100GB
+      if (file.size > maxSize) {
+        showNotification("File too large. Maximum size is 100GB", "error");
+        return;
+      }
+      
+      // Check file extension
+      const fileName = file.name;
+      const ext = fileName.toLowerCase().split('.').pop();
+      const dangerousExts = ['exe', 'bat', 'cmd', 'scr', 'pif', 'vbs', 'js'];
+      if (dangerousExts.includes(ext)) {
+        if (!confirm(`Warning: .${ext} files can be dangerous. Continue uploading?`)) {
+          return;
+        }
+      }
+      
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("socketId", socket.id);
+        formData.append("userId", "user_" + Date.now());
+        
+        document.getElementById("file-name-text").textContent = fileName;
+        fileIndicator.classList.add("active");
+        currentUploadProgress.startTime = Date.now();
+        currentUploadProgress.fileName = fileName;
+        
+        // Show initial file info
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        showNotification(`Starting upload: ${fileName} (${fileSizeMB} MB)`, "info", 3000);
+        
+        const response = await fetch(SERVER_URL + `/room/${encodeURIComponent(roomName)}/upload-file`, {
+          method: "POST",
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to upload file");
+        }
+        
+        const result = await response.json();
+        console.log("File upload initiated:", result);
+        
+        // Show upload initiated notification
+        showNotification(`Upload initiated for ${fileName}`, "success", 3000);
+        
+      } catch (error) {
+        console.error("Error uploading file:", error);
+        showNotification("Error uploading file: " + error.message, "error", 5000);
+        fileIndicator.classList.remove("active");
+        resetProgressIndicators();
+      }
+    }
+    
+    // Enhanced event listeners
+    document.getElementById("send-message").addEventListener("click", () => {
+      const msgInput = document.getElementById("message-input");
+      const msg = msgInput.value.trim();
+      if (msg) sendMessage(msg);
+    });
+    
+    document.getElementById("message-input").addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const msg = e.target.value.trim();
+        if (msg) sendMessage(msg);
+      }
+    });
+    
+    document.getElementById("attach-file").addEventListener("click", () => {
+      document.getElementById("file-input").click();
+    });
+    
+    document.getElementById("file-input").addEventListener("change", (ev) => {
+      const f = ev.target.files[0];
+      if (f) uploadFile(f);
+      ev.target.value = "";
+    });
+    
+    // Drag and drop support
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      document.body.style.backgroundColor = '#2d3748';
+    });
+    
+    document.addEventListener('dragleave', (e) => {
+      if (e.clientX === 0 && e.clientY === 0) {
+        document.body.style.backgroundColor = '#1a202c';
+      }
+    });
+    
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      document.body.style.backgroundColor = '#1a202c';
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        uploadFile(files[0]);
+      }
+    });
+    
+    document.getElementById("back-button").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+    
+    document.getElementById("logout-button").addEventListener("click", () => {
+      localStorage.clear();
+      window.location.href = "/";
+    });
+    
+    document.getElementById("options-button").addEventListener("click", () => {
+      document.getElementById("options-menu").classList.toggle("hidden");
+    });
+    
+    document.getElementById("toggle-search").addEventListener("click", () => {
+      const searchBar = document.getElementById("search-bar");
+      const isVisible = searchBar.style.transform === "translateY(0px)";
+      searchBar.style.transform = isVisible ? "translateY(-100%)" : "translateY(0px)";
+      if (!isVisible) {
+        document.getElementById("search-input").focus();
+      }
+    });
+    
+    document.getElementById("close-search").addEventListener("click", () => {
+      document.getElementById("search-bar").style.transform = "translateY(-100%)";
+      document.querySelectorAll(".highlighted").forEach(el => el.classList.remove("highlighted"));
+      document.getElementById("search-input").value = "";
+    });
+    
+    document.getElementById("search-input").addEventListener("keypress", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const term = this.value.trim().toLowerCase();
+        if (term) searchMessages(term);
+      }
+    });
+    
+    document.getElementById("search-button").addEventListener("click", function() {
+      const term = document.getElementById("search-input").value.trim().toLowerCase();
+      if (term) searchMessages(term);
+    });
+    
+    function searchMessages(term) {
+      const messages = document.querySelectorAll(".chat-message");
+      let found = 0;
+      
+      messages.forEach(msg => {
+        msg.classList.remove("highlighted");
+        if (msg.innerText.toLowerCase().includes(term)) {
+          msg.classList.add("highlighted");
+          found++;
+          
+          if (found === 1) {
+            msg.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }
+      });
+      
+      if (found === 0) {
+        showNotification("No matches found", "warning", 2000);
+      } else {
+        showNotification(`Found ${found} match${found > 1 ? 'es' : ''}`, "success", 2000);
+      }
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'f':
+            e.preventDefault();
+            document.getElementById("toggle-search").click();
+            break;
+          case 'u':
+            e.preventDefault();
+            document.getElementById("attach-file").click();
+            break;
+        }
+      }
+      
+      if (e.key === 'Escape') {
+        // Close any open modals or search
+        document.getElementById("close-search").click();
+        document.getElementById("closeVideoModal").click();
+        document.querySelectorAll('.fixed').forEach(modal => {
+          if (modal.id !== 'file-sending-indicator' && 
+              modal.id !== 'file-downloading-indicator' && 
+              modal.id !== 'text-sending-indicator') {
+            modal.remove();
+          }
+        });
+      }
+    });
+    
+    // Initialize room info and load content
+    loadStoredRoomInfo();
+    loadContent();
+    
+    // Auto-refresh content every 30 seconds
+    setInterval(() => {
+      if (!document.getElementById("file-sending-indicator").classList.contains("active") &&
+          !document.getElementById("file-downloading-indicator").classList.contains("active")) {
+        loadContent();
+      }
+    }, 30000);
+    
+    // Online/offline status
+    window.addEventListener('online', () => {
+      showNotification("Connection restored", "success", 2000);
+      socket.connect();
+    });
+    
+    window.addEventListener('offline', () => {
+      showNotification("Connection lost", "warning", 3000);
+    });
+    
+    // Performance monitoring
+    if ('performance' in window) {
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const perf = performance.getEntriesByType('navigation')[0];
+          if (perf && perf.loadEventEnd - perf.loadEventStart > 3000) {
+            console.warn('Slow page load detected:', perf.loadEventEnd - perf.loadEventStart + 'ms');
+          }
+        }, 0);
+      });
+    }
+    
+    console.log("Enhanced Infinity Share client initialized");
+    console.log("Features: Real-time progress, streaming uploads/downloads, enhanced caching, drag & drop");
+    console.log("Keyboard shortcuts: Ctrl+F (search), Ctrl+U (upload), Esc (close modals)");
+  </script>
+</body>
+</html>
